@@ -60,26 +60,29 @@ class NoCacheHTTPRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
         SimpleHTTPRequestHandler.end_headers(self)
-        stop = False
-    
-        while not stop:
+
+        while not self.server.stop:
             message = self.server.sse_events.get()
-            print(message)
+            #print(message)
             self.server.sse_events_id+=1
             id = str(self.server.sse_events_id)
             event = message['event']
             data = message['data']
-            print(("data: %s" % data))
-            print(("id: %s" % id))
-            print(("event: %s" % event))
+            #print(("data: %s" % data))
+            #print(("id: %s" % id))
+            #print(("event: %s" % event))
             self.wfile.write(("data: %s\r\n" % data).encode('UTF-8', 'replace'))
             self.wfile.write(("id: %s\r\n" % id).encode('UTF-8', 'replace'))
             self.wfile.write(("event: %s\r\n" % event).encode('UTF-8','replace'))
             self.wfile.write(b"\r\n")
             self.wfile.flush()
             if event == "terminate":
-                stop = True
-            
+                self.server.stop = True
+
+        self.send_response(204)
+        SimpleHTTPRequestHandler.end_headers(self)
+        self.close_connection = True
+
     def finish(self):
         if type(self.wfile) == io.BytesIO:
             self.response_value = self.wfile.getvalue()
@@ -93,7 +96,7 @@ class NoCacheHTTPRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
-        
+
     def log_message(self, format, *args):
         if DEBUG:
             try:
@@ -155,15 +158,17 @@ class AThread(QtCore.QThread):
             self.httpdGame = self.serverClass((self.ip, self.port), self.handlerClass)
             self.httpdGame.sse_events = queue.Queue()
             self.httpdGame.sse_events_id = 0
+
         except OSError:
             self.socketerror = True
 
         self.running = False
-        
+
     def sendsse(self, event):
         self.httpdGame.sse_events.put(event)
 
     def run(self):
+        self.httpdGame.stop = False
         if(self.socketerror):
             self.running = False
             return
@@ -183,6 +188,7 @@ class AThread(QtCore.QThread):
         self.statChanged.emit()
 
     def stop(self):
+        self.httpdGame.stop = True
         self.httpdGame.shutdown()
         self.statChanged.emit()
 
@@ -216,6 +222,7 @@ class serverController(QtCore.QObject):
 
     def stopServer(self):
         try:
+            self.sendEvent('terminate','terminate')
             self.thread.stop()
         except AttributeError:
             pass
@@ -237,9 +244,9 @@ class serverController(QtCore.QObject):
             stat = False
 
         return stat
-        
+
     def sendEvent(self, data, event='new'):
-        self.thread.sendsse({'data':data, 'event':event})        
+        self.thread.sendsse({'data':data, 'event':event})
 
     def getStatusMsg(self):
         if(self.ip == '0.0.0.0' or self.ip == '127.0.0.1'):
@@ -255,7 +262,7 @@ class serverController(QtCore.QObject):
 __title__='waitress',
 __description__ ='waitress serves hot pages.',
 __copyright__ = 'Érico Vieira Porto, 2016, MIT License.'
-            
+
 def main():
     control = serverController()
     control.runServer('/home/erico/Projects/hotreload')

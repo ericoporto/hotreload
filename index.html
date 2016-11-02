@@ -5,10 +5,10 @@
 </head>
 <body>
   <script>
-    var source = new EventSource('/events');
-    source.addEventListener("new", function(e) {
-      document.body.innerHTML = document.body.innerHTML + e.data;
-    }, false);
+     var source = new EventSource('/events');
+     source.addEventListener("new", function(e) {
+       document.body.innerHTML = document.body.innerHTML + e.data;
+     }, false);
   </script>
   TEST PAGE
 </body>
